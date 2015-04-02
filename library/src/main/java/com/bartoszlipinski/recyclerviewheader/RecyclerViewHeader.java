@@ -27,7 +27,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
-import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
@@ -38,8 +37,15 @@ import android.widget.RelativeLayout;
  */
 public class RecyclerViewHeader extends RelativeLayout {
 
+    private RecyclerView mRecycler;
+
+    private HeaderItemDecoration mHeaderItemDecoration;
+
     private boolean mAlreadyAligned;
+
     private int mCurrentScroll;
+    private int mTopMargin;
+    private int mBottomMargin;
 
     /**
      * Inflates layout from <code>xml</code> and encapsulates it with <code>RecyclerViewHeader</code>.
@@ -92,12 +98,13 @@ public class RecyclerViewHeader extends RelativeLayout {
         validateRecycler(recycler, headerAlreadyAligned);
 
         mAlreadyAligned = headerAlreadyAligned;
+        mRecycler = recycler;
 
-        setupAlignment(recycler);
-        setupHeader(recycler);
+        setupAlignment();
+        setupHeader();
     }
 
-    private void setupAlignment(RecyclerView recycler) {
+    private void setupAlignment() {
         if (!mAlreadyAligned) {
             //setting alignment of header
             ViewGroup.LayoutParams headerParams = getLayoutParams();
@@ -123,53 +130,45 @@ public class RecyclerViewHeader extends RelativeLayout {
             RecyclerViewHeader.this.setLayoutParams(newHeaderParams);
 
             //setting alignment of recycler
-            FrameLayout newParent = new FrameLayout(recycler.getContext());
-            newParent.setLayoutParams(recycler.getLayoutParams());
-            ViewParent currentParent = recycler.getParent();
+            FrameLayout newParent = new FrameLayout(mRecycler.getContext());
+            newParent.setLayoutParams(mRecycler.getLayoutParams());
+            ViewParent currentParent = mRecycler.getParent();
             if (currentParent instanceof ViewGroup) {
-                int indexWithinParent = ((ViewGroup) currentParent).indexOfChild(recycler);
+                int indexWithinParent = ((ViewGroup) currentParent).indexOfChild(mRecycler);
 
                 ((ViewGroup) currentParent).removeViewAt(indexWithinParent);
-                recycler.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-                newParent.addView(recycler);
+                mRecycler.setLayoutParams(new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+                newParent.addView(mRecycler);
                 newParent.addView(RecyclerViewHeader.this);
                 ((ViewGroup) currentParent).addView(newParent, indexWithinParent);
             }
         }
     }
 
-    private void setupHeader(final RecyclerView recycler) {
-        recycler.setOnScrollListener(new RecyclerView.OnScrollListener() {
+    private void setupHeader() {
+        mRecycler.setOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
                 mCurrentScroll += dy;
-
                 RecyclerViewHeader.this.setTranslationY(-mCurrentScroll);
             }
         });
 
-        RecyclerViewHeader.this.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                int height = RecyclerViewHeader.this.getHeight();
-                if (height > 0) {
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN) {
-                        RecyclerViewHeader.this.getViewTreeObserver().removeOnGlobalLayoutListener(this);
-                    } else {
-                        RecyclerViewHeader.this.getViewTreeObserver().removeGlobalOnLayoutListener(this);
-                    }
+        MarginLayoutParams params = (MarginLayoutParams) getLayoutParams();
+        mTopMargin = params.topMargin;
+        mBottomMargin = params.bottomMargin;
 
-                    if (mAlreadyAligned) {
-                        MarginLayoutParams params = (MarginLayoutParams) getLayoutParams();
-                        height += params.topMargin;
-                        height += params.bottomMargin;
-                    }
+        mHeaderItemDecoration = new HeaderItemDecoration(mRecycler.getLayoutManager(), 0);
+        mRecycler.addItemDecoration(mHeaderItemDecoration, 0);
+    }
 
-                    recycler.addItemDecoration(new HeaderItemDecoration(recycler.getLayoutManager(), height), 0);
-                }
-            }
-        });
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        mHeaderItemDecoration.mHeaderHeight = b - t + ((mAlreadyAligned) ? mTopMargin + mBottomMargin : 0);
+        mRecycler.removeItemDecoration(mHeaderItemDecoration);
+        mRecycler.addItemDecoration(mHeaderItemDecoration, 0);
     }
 
     private int convertRulesToGravity(int[] rules) {
